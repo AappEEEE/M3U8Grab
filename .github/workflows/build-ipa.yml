@@ -8,7 +8,7 @@ on:
 jobs:
   build:
     name: Build M3U8Grab (unsigned)
-    runs-on: macos-13
+    runs-on: macos-latest
     timeout-minutes: 40
 
     steps:
