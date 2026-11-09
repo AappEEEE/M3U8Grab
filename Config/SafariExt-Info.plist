@@ -22,6 +22,18 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>NSExtension</key>
 	<dict>
+		<key>NSExtensionAttributes</key>
+		<dict>
+			<key>SFSafariWebsiteAccess</key>
+			<dict>
+				<key>Allowed Domains</key>
+				<array>
+					<string>*</string>
+				</array>
+				<key>Level</key>
+				<string>All</string>
+			</dict>
+		</dict>
 		<key>NSExtensionPointIdentifier</key>
 		<string>com.apple.Safari.web-extension</string>
 		<key>NSExtensionPrincipalClass</key>
