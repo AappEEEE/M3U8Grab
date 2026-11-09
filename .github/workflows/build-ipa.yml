@@ -1,0 +1,96 @@
+name: Build unsigned IPA
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build M3U8Grab (unsigned)
+    runs-on: macos-14
+    timeout-minutes: 40
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show toolchain
+        run: |
+          sw_vers
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-version
+
+      - name: Install XcodeGen
+        run: |
+          brew update >/dev/null 2>&1 || true
+          brew install xcodegen
+          xcodegen --version
+
+      - name: Generate Xcode project
+        run: xcodegen generate --spec project.yml
+
+      - name: Validate extension resources
+        run: |
+          test -f Sources/SafariExt/Resources/manifest.json
+          test -f Sources/SafariExt/Resources/background.js
+          test -f Sources/SafariExt/Resources/content.js
+          test -f Sources/SafariExt/Resources/popup.html
+          test -f Sources/App/Resources/injected.js
+          python3 -c "import json;json.load(open('Sources/SafariExt/Resources/manifest.json'));print('manifest ok')"
+
+      - name: Build (no code signing)
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project M3U8Grab.xcodeproj \
+            -scheme M3U8Grab \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build/DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGN_ENTITLEMENTS="" \
+            DEVELOPMENT_TEAM="" \
+            ONLY_ACTIVE_ARCH=NO \
+            clean build
+
+      - name: Package unsigned IPA
+        run: |
+          set -euo pipefail
+          APP="build/DerivedData/Build/Products/Release-iphoneos/M3U8Grab.app"
+          if [ ! -d "$APP" ]; then
+            echo "app bundle not found, searching..."
+            APP=$(find build/DerivedData/Build/Products -maxdepth 2 -name "M3U8Grab.app" -type d | head -n 1)
+          fi
+          echo "app: $APP"
+          ls -la "$APP"
+          ls -la "$APP/PlugIns" || true
+
+          rm -rf Payload M3U8Grab-unsigned.ipa
+          mkdir -p Payload
+          cp -R "$APP" Payload/M3U8Grab.app
+          zip -qry M3U8Grab-unsigned.ipa Payload
+          ls -lh M3U8Grab-unsigned.ipa
+          shasum -a 256 M3U8Grab-unsigned.ipa | tee sha256.txt
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: M3U8Grab-unsigned-ipa
+          path: |
+            M3U8Grab-unsigned.ipa
+            sha256.txt
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload build log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs
+          path: build/DerivedData/Logs
+          if-no-files-found: ignore
+          retention-days: 7
