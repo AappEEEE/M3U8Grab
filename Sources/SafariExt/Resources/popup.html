@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>M3U8 Grab</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <header>
+    <div class="title">
+      <span class="dot"></span>
+      <h1>M3U8 Grab</h1>
+    </div>
+    <button id="clear" title="清空列表">清空</button>
+  </header>
+
+  <div id="hint" class="hint hidden">正在识别…</div>
+  <ul id="list"></ul>
+
+  <div id="empty" class="empty hidden">
+    <p>这个页面还没有抓到 M3U8。</p>
+    <p class="muted">先点播放按钮让视频开始加载，再打开这里。</p>
+  </div>
+
+  <footer>
+    <p>点「复制」后回到 M3U8 Grab App，在「工具 › 手动下载」粘贴即可。</p>
+  </footer>
+
+  <script src="popup.js"></script>
+</body>
+</html>
