@@ -8,7 +8,8 @@ enum HLSClient {
         let configuration = URLSessionConfiguration.default
         configuration.timeoutIntervalForRequest = 30
         configuration.timeoutIntervalForResource = 120
-        configuration.httpMaximumConnectionsPerHost = 8
+        configuration.httpMaximumConnectionsPerHost = 16
+        configuration.waitsForConnectivity = false
         configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
         configuration.httpShouldSetCookies = true
         configuration.httpCookieAcceptPolicy = .always
@@ -51,14 +52,32 @@ enum HLSClient {
         throw DownloadError.badPlaylist
     }
 
-    static func getData(url: URL, referer: String?, range: HLSByteRange?) async throws -> Data {
-        var request = makeRequest(url: url, referer: referer)
+    static func getData(url: URL, referer: String?, range: HLSByteRange?, timeout: TimeInterval = 30) async throws -> Data {
+        var request = makeRequest(url: url, referer: referer, timeout: timeout)
         if let range {
             request.setValue("bytes=\(range.offset)-\(range.end)", forHTTPHeaderField: "Range")
         }
         let (data, response) = try await session.data(for: request)
-        if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
-            throw DownloadError.http(http.statusCode, url.absoluteString)
+        if let http = response as? HTTPURLResponse {
+            guard (200..<300).contains(http.statusCode) else {
+                throw DownloadError.http(http.statusCode, url.absoluteString)
+            }
+            if http.value(forHTTPHeaderField: "Content-Encoding") == nil,
+               let declared = http.value(forHTTPHeaderField: "Content-Length").flatMap(Int.init), declared != data.count {
+                throw DownloadError.network("响应长度不完整（期望 \(declared)，收到 \(data.count)）")
+            }
+            if let range {
+                guard http.statusCode == 206 else {
+                    throw DownloadError.network("服务器未按 Range 返回分片（HTTP \(http.statusCode)）")
+                }
+                if let contentRange = http.value(forHTTPHeaderField: "Content-Range"),
+                   !contentRange.lowercased().hasPrefix("bytes \(range.offset)-\(range.end)/") {
+                    throw DownloadError.network("Range 响应位置不匹配：\(contentRange)")
+                }
+                guard data.count == range.length else {
+                    throw DownloadError.network("Range 长度不完整（期望 \(range.length)，收到 \(data.count)）")
+                }
+            }
         }
         guard !data.isEmpty else { throw DownloadError.emptySegment(url.absoluteString) }
         return data

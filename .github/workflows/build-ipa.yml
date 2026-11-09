@@ -7,13 +7,18 @@ on:
       - README.md
   workflow_dispatch:
 
+permissions:
+  contents: write
+
+concurrency:
+  group: m3u8grab-latest-release
+  cancel-in-progress: false
+
 jobs:
   build:
     name: Build M3U8Grab (unsigned)
     runs-on: macos-latest
     timeout-minutes: 40
-    permissions:
-      contents: write
 
     steps:
       - name: Checkout
@@ -30,6 +35,11 @@ jobs:
           brew update >/dev/null 2>&1 || true
           brew install xcodegen
           xcodegen --version
+
+      - name: Run HLS regression tests
+        run: |
+          swiftc Sources/App/HLSPlaylist.swift tools/HLSRegression.swift -o /tmp/hls-regression
+          /tmp/hls-regression
 
       - name: Generate Xcode project
         run: xcodegen generate --spec project.yml
@@ -73,35 +83,67 @@ jobs:
           ls -la "$APP"
           ls -la "$APP/PlugIns" || true
 
-          rm -rf Payload M3U8Grab-unsigned.ipa
+          export APP
+          python3 - <<'PY'
+          import json, os, pathlib, plistlib
+          app = pathlib.Path(os.environ['APP'])
+          extension = app / 'PlugIns/M3U8GrabSafari.appex'
+          for bundle in (app, extension):
+              with (bundle / 'Info.plist').open('rb') as file:
+                  info = plistlib.load(file)
+              assert info['CFBundleShortVersionString'] == '1.1.0', (bundle, info)
+              assert str(info['CFBundleVersion']) == '2', (bundle, info)
+          with (extension / 'manifest.json').open() as file:
+              assert json.load(file)['version'] == '1.1.0'
+          print('App + Safari extension: 1.1.0 (2); root manifest: 1.1.0')
+          PY
+          rm -rf Payload M3U8Grab.ipa
           mkdir -p Payload
           cp -R "$APP" Payload/M3U8Grab.app
-          zip -qry M3U8Grab-unsigned.ipa Payload
-          ls -lh M3U8Grab-unsigned.ipa
-          shasum -a 256 M3U8Grab-unsigned.ipa | tee sha256.txt
+          zip -qry M3U8Grab.ipa Payload
+          ls -lh M3U8Grab.ipa
+          shasum -a 256 M3U8Grab.ipa | tee sha256.txt
 
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
         with:
           name: M3U8Grab-unsigned-ipa
           path: |
-            M3U8Grab-unsigned.ipa
+            M3U8Grab.ipa
             sha256.txt
           if-no-files-found: error
           retention-days: 30
 
       - name: Publish GitHub release
-        if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          TAG: v1.0.0
+          TAG: latest
         run: |
-          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" \
-            --title "M3U8 Grab v1.0.0" \
-            --notes "Initial public release. Unsigned IPA; sign it with your Apple ID or signing certificate before installing. See README for installation guidance."
-          gh release upload "$TAG" M3U8Grab-unsigned.ipa --clobber
-          gh release upload "$TAG" sha256.txt --clobber
+          set -euo pipefail
+          TITLE="M3U8 Grab v1.1.0 (build 2)"
+          NOTES=$(cat <<EOF
+          ## v1.1.0 · build 2
+          - 下载列表和详情支持暂停/继续、速度与预计剩余时间；合并阶段仅可取消。
+          - 保留已完成分片；失败分片在主体下载结束后以低并发补下，支持恢复任务。
+          - 改善下载页布局与按钮交互；清理已完成任务不会清除暂停或失败任务。
+          - 主 App 和 Safari 扩展版本一致；LiveContainer 内仍仅支持 App 内浏览器嗅探，系统 Safari 扩展需由 iOS 正常安装登记。
+
+          此 IPA 未签名。Sideloadly/AltStore/SideStore 等安装工具需要个人 Apple ID 或签名证书；TrollStore 按其适用系统和安装流程操作。
+          稳定下载资产：M3U8Grab.ipa；校验文件：sha256.txt。
+          构建提交：${GITHUB_SHA}
+          构建记录：https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
+          EOF
+          )
+          gh api --method PATCH "repos/${GH_REPO}/git/refs/tags/${TAG}" -f sha="$GITHUB_SHA" -F force=true || \
+            gh api --method POST "repos/${GH_REPO}/git/refs" -f ref="refs/tags/${TAG}" -f sha="$GITHUB_SHA"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --title "$TITLE" --notes "$NOTES" --latest
+          else
+            gh release create "$TAG" --verify-tag --title "$TITLE" --notes "$NOTES" --latest
+          fi
+          gh release upload "$TAG" M3U8Grab.ipa sha256.txt --clobber
 
       - name: Upload build log on failure
         if: failure()

@@ -2,13 +2,13 @@ import Foundation
 
 // MARK: - 数据结构
 
-struct HLSByteRange: Equatable {
+struct HLSByteRange: Equatable, Codable {
     var length: Int
     var offset: Int
     var end: Int { offset + max(0, length - 1) }
 }
 
-struct HLSKey: Equatable {
+struct HLSKey: Equatable, Codable {
     var method: String
     var uri: URL?
     var iv: Data?
@@ -27,12 +27,14 @@ struct HLSKey: Equatable {
     }
 }
 
-struct HLSInitMap: Equatable {
+struct HLSInitMap: Equatable, Codable {
     var url: URL
     var range: HLSByteRange?
+    // Freeze encryption at EXT-X-MAP declaration, independent of later media keys.
+    var key: HLSKey? = nil
 }
 
-struct HLSSegment: Equatable {
+struct HLSSegment: Equatable, Codable {
     var url: URL
     var duration: Double
     var sequence: Int
@@ -42,7 +44,7 @@ struct HLSSegment: Equatable {
     var title: String?
 }
 
-struct HLSVariant: Identifiable, Equatable {
+struct HLSVariant: Identifiable, Equatable, Codable {
     var url: URL
     var bandwidth: Int?
     var averageBandwidth: Int?
@@ -61,7 +63,7 @@ struct HLSVariant: Identifiable, Equatable {
     }
 }
 
-struct HLSPlaylist {
+struct HLSPlaylist: Codable {
     var url: URL
     var isMaster: Bool = false
     var variants: [HLSVariant] = []
@@ -106,11 +108,10 @@ enum HLSParser {
         var pendingVariantAttributes: [String: String]?
         var pendingDuration: Double = 0
         var pendingTitle: String?
-        var pendingRange: HLSByteRange?
+        var pendingRangeText: String?
         var currentKey: HLSKey?
         var currentMap: HLSInitMap?
         var mediaSequence = 0
-        var nextRangeOffset = 0
         var sawStreamInfo = false
         var sawSegment = false
         var sawEndList = false
@@ -139,10 +140,7 @@ enum HLSParser {
                         pendingTitle = title.isEmpty ? nil : title
                     }
                 case "#EXT-X-BYTERANGE":
-                    if let range = parseByteRange(value, defaultOffset: nextRangeOffset) {
-                        pendingRange = range
-                        nextRangeOffset = range.end + 1
-                    }
+                    pendingRangeText = value
                 case "#EXT-X-KEY":
                     let parsed = attributes(value)
                     let method = parsed["METHOD"] ?? "NONE"
@@ -158,7 +156,7 @@ enum HLSParser {
                     if let uriText = parsed["URI"],
                        let mapURL = URL(string: uriText, relativeTo: url)?.absoluteURL {
                         let range = parsed["BYTERANGE"].flatMap { parseByteRange($0, defaultOffset: 0) }
-                        currentMap = HLSInitMap(url: mapURL, range: range)
+                        currentMap = HLSInitMap(url: mapURL, range: range, key: currentKey)
                     }
                 case "#EXT-X-MEDIA-SEQUENCE":
                     mediaSequence = Int(value) ?? 0
@@ -187,6 +185,20 @@ enum HLSParser {
                 playlist.variants.append(variant)
                 pendingVariantAttributes = nil
             } else {
+                var pendingRange: HLSByteRange?
+                if let rangeText = pendingRangeText {
+                    var defaultOffset = 0
+                    if !rangeText.contains("@") {
+                        // Implicit offsets require the immediately preceding segment
+                        // to reference a byte range of the same resource.
+                        guard let previous = playlist.segments.last,
+                              previous.url == absolute,
+                              let previousRange = previous.byteRange else { throw ParseError.invalid }
+                        defaultOffset = previousRange.end + 1
+                    }
+                    guard let parsedRange = parseByteRange(rangeText, defaultOffset: defaultOffset) else { throw ParseError.invalid }
+                    pendingRange = parsedRange
+                }
                 sawSegment = true
                 playlist.segments.append(
                     HLSSegment(
@@ -201,8 +213,7 @@ enum HLSParser {
                 )
                 pendingDuration = 0
                 pendingTitle = nil
-                pendingRange = nil
-                nextRangeOffset = 0
+                pendingRangeText = nil
             }
         }
 
@@ -260,11 +271,14 @@ enum HLSParser {
 
     static func parseByteRange(_ value: String, defaultOffset: Int) -> HLSByteRange? {
         let pieces = value.split(separator: "@", maxSplits: 1, omittingEmptySubsequences: false)
-        guard let length = Int(pieces[0].trimmingCharacters(in: .whitespaces)) else { return nil }
+        guard let length = Int(pieces[0].trimmingCharacters(in: .whitespaces)), length > 0 else { return nil }
         var offset = defaultOffset
-        if pieces.count > 1, let explicit = Int(pieces[1].trimmingCharacters(in: .whitespaces)) {
+        if pieces.count > 1 {
+            guard let explicit = Int(pieces[1].trimmingCharacters(in: .whitespaces)) else { return nil }
             offset = explicit
         }
+        // Keep end + 1 representable for the following implicit range.
+        guard offset >= 0, offset <= Int.max - length else { return nil }
         return HLSByteRange(length: length, offset: offset)
     }
 

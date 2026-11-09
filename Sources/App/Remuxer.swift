@@ -19,7 +19,8 @@ enum FileMerger {
         defer { try? handle.close() }
 
         for file in files {
-            guard let input = try? FileHandle(forReadingFrom: file) else { continue }
+            // 缺片应阻止交付，而不是静默跳过生成损坏的视频。
+            let input = try FileHandle(forReadingFrom: file)
             while true {
                 let chunk = try input.read(upToCount: 1 << 20) ?? Data()
                 if chunk.isEmpty { break }

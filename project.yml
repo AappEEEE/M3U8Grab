@@ -10,6 +10,8 @@ options:
 settings:
   base:
     SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "1.1.0"
+    CURRENT_PROJECT_VERSION: "2"
     IPHONEOS_DEPLOYMENT_TARGET: "15.0"
     ENABLE_BITCODE: "NO"
     SWIFT_OPTIMIZATION_LEVEL: "-O"
@@ -32,8 +34,6 @@ targets:
         PRODUCT_NAME: M3U8Grab
         INFOPLIST_FILE: Config/App-Info.plist
         TARGETED_DEVICE_FAMILY: "1,2"
-        MARKETING_VERSION: "1.0.0"
-        CURRENT_PROJECT_VERSION: "1"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         SUPPORTS_MACCATALYST: "NO"
@@ -48,8 +48,7 @@ targets:
     platform: iOS
     sources:
       - path: Sources/SafariExt/SafariWebExtensionHandler.swift
-      # 不加 type: folder —— manifest.json / *.js 必须平铺在 appex 包根，
-      # 否则 Safari 找不到 manifest。组方式会把每个文件当作资源拷到包根。
+      # Resources are copied flat into the appex bundle root; Safari requires root-level manifest.json.
       - path: Sources/SafariExt/Resources
     settings:
       base:

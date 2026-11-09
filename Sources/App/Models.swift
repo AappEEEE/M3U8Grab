@@ -92,6 +92,7 @@ enum DownloadPhase: String, Codable, Equatable {
     case finished
     case failed
     case cancelled
+    case paused
 
     var displayName: String {
         switch self {
@@ -102,6 +103,7 @@ enum DownloadPhase: String, Codable, Equatable {
         case .finished: return "已完成"
         case .failed: return "失败"
         case .cancelled: return "已取消"
+        case .paused: return "已暂停"
         }
     }
 
