@@ -241,7 +241,7 @@ extension BrowserEngine: WKNavigationDelegate {
         Task { @MainActor [weak self] in
             self?.isLoading = false
             guard code != NSURLErrorCancelled else { return }
-            if code == NSURLErrorUnsupportedURL || code == NSURLErrorCannotShowURL
+            if code == NSURLErrorUnsupportedURL || code == NSURLErrorBadURL
                 || code == NSURLErrorCannotOpenFile {
                 if let failingURL, failingURL.absoluteString.lowercased().contains(".m3u8") {
                     self?.interceptedPlaylist = failingURL
