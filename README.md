@@ -70,77 +70,17 @@ M3U8 Grab 是一个**纯本地**的 iOS 应用：在内置浏览器里打开任�
 
 ---
 
-## 快速开始
+## 下载与安装
 
-三种出 IPA 的方式，按「有没有 Mac」选。
+### 获取 IPA
 
-### 方式 A：GitHub Actions 一键出包（推荐，不需要 Mac）
+从本仓库的 [Releases](https://github.com/AappEEEE/M3U8Grab/releases) 下载最新的 `M3U8Grab.ipa`。下载后使用下方任一种方式签名并安装到 iPhone。
 
-仓库里已经配好 `.github/workflows/build-ipa.yml`，推送到 `main` 或在 Actions 页面点 **Run workflow** 即可。
-
-1. Fork 本仓库（或直接把源码推到自己的仓库）
-2. 打开 **Actions** → **Build unsigned IPA** → **Run workflow**
-3. 等 5–8 分钟，构建完成后在本次运行的 **Artifacts** 里下载 `M3U8Grab-unsigned-ipa`
-4. 解压得到 `M3U8Grab-unsigned.ipa`，用下面的方式签名安装
-
-> 公开仓库的 Actions 分钟数完全免费；私有仓库会消耗额度，macOS runner 按 10 倍计费。
-> 产物是**未签名** IPA，必须自己签一次才能装到真机。
-
-### 方式 B：本地 Xcode
-
-```bash
-# 1. 安装工程生成器（本项目只维护 project.yml，不提交 .xcodeproj）
-brew install xcodegen
-
-# 2. 生成 Xcode 工程
-cd M3U8Grab
-xcodegen generate
-
-# 3. 打开
-open M3U8Grab.xcodeproj
-```
-
-然后在 Xcode 里：
-
-1. `Signing & Capabilities` 选中你的 Apple ID Team
-2. 把两个 target 的 Bundle Identifier 改成你自己唯一的，**扩展必须形如** `com.你的前缀.app.SafariExtension`（必须是主 App 的子标识）
-3. 选中 `M3U8Grab` scheme，连上 iPhone，⌘R
-
-### 方式 C：命令行直接出未签名 IPA
-
-```bash
-xcodegen generate
-xcodebuild -project M3U8Grab.xcodeproj \
-  -scheme M3U8Grab -configuration Release -sdk iphoneos \
-  -destination 'generic/platform=iOS' \
-  CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
-  CODE_SIGN_IDENTITY="" DEVELOPMENT_TEAM="" clean build
-
-mkdir -p Payload
-cp -R build/Build/Products/Release-iphoneos/M3U8Grab.app Payload/
-zip -qry M3U8Grab-unsigned.ipa Payload
-```
-
-<details>
-<summary>方式 D：虚拟机里跑 macOS（没有 Mac 也没有 GitHub 账号时的兜底）</summary>
-
-不推荐，只在实在没有别的办法时使用。要点：
-
-- VMware Workstation 17.5+ 配合 Unlocker / OpenCore 引导
-- 分配 ≥4 核、≥8 GB 内存、≥100 GB 磁盘
-- 虚拟机 `.vmx` 需要补上 `smc.version = "0"`、`cpuid.0.eax` 掩码、`board-id.reflectHost = "TRUE"`
-- 装完系统装 VMware Tools，再装 Xcode 15.4（App Store 或开发者网站）
-- `sudo xcode-select -s /Applications/Xcode.app`
-- iPhone 通过 `VM → Removable Devices → 连接` 直通给虚拟机
-- 常见坑：USB 直通失败、iOS 16+ 需要打开「开发者模式」、首次运行要信任开发者证书
-
-</details>
-
----
+> Releases 中的 IPA 由 GitHub Actions 自动构建并发布，属于未签名版本；安装前需用自己的 Apple ID 或签名证书完成签名。
 
 ## 安装到 iPhone
 
-拿到 IPA 后，按你的条件选一条路：
+从 [Releases](https://github.com/AappEEEE/M3U8Grab/releases) 下载 `M3U8Grab.ipa` 后，按你的条件选一条路：
 
 | 方式 | 需要 | 有效期 | 说明 |
 | --- | --- | --- | --- |
