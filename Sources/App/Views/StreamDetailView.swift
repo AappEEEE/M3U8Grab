@@ -53,10 +53,28 @@ struct StreamDetailView: View {
                     }
                     .buttonStyle(.bordered)
                 }
+
+                Button {
+                    copyToPasteboard(curlCommand())
+                    store.toast = "已复制 curl 命令（含 Referer）"
+                } label: {
+                    Label("复制 curl 命令", systemImage: "terminal")
+                        .font(.footnote)
+                }
             }
 
             Section("播放列表信息") {
-                if isLoadingPlaylist {
+                if stream.kind == .dash {
+                    infoRow("类型", "DASH 播放列表（.mpd）")
+                    Text("DASH 需要单独的解析与切片合并流程，当前版本暂不支持下载；可以用「复制链接」交给其他工具。")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                } else if stream.kind == .file {
+                    infoRow("扩展名", stream.url.pathExtension.isEmpty ? "未知" : stream.url.pathExtension.lowercased())
+                    Text("单文件直链会原样保存，不做转码；支持断点续传。")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                } else if isLoadingPlaylist {
                     HStack(spacing: 10) {
                         ProgressView()
                         Text("解析中…").foregroundColor(.secondary).font(.footnote)
@@ -117,27 +135,29 @@ struct StreamDetailView: View {
                 }
             }
 
-            Section("导出设置") {
-                Picker("格式", selection: $format) {
-                    ForEach(OutputFormat.allCases) { item in
-                        Text(item.displayName).tag(item)
+            if stream.kind == .hls {
+                Section("导出设置") {
+                    Picker("格式", selection: $format) {
+                        ForEach(OutputFormat.allCases) { item in
+                            Text(item.displayName).tag(item)
+                        }
                     }
-                }
-                .pickerStyle(.segmented)
+                    .pickerStyle(.segmented)
 
-                Text(format.detail)
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
+                    Text(format.detail)
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
 
-                Toggle("完成后保存到相册", isOn: $saveToPhotos)
+                    Toggle("完成后保存到相册", isOn: $saveToPhotos)
 
-                Stepper(value: $concurrency, in: 1...16) {
-                    HStack {
-                        Text("并发分片数")
-                        Spacer()
-                        Text("\(concurrency)")
-                            .foregroundColor(.secondary)
-                            .monospacedDigit()
+                    Stepper(value: $concurrency, in: 1...16) {
+                        HStack {
+                            Text("并发分片数")
+                            Spacer()
+                            Text("\(concurrency)")
+                                .foregroundColor(.secondary)
+                                .monospacedDigit()
+                        }
                     }
                 }
             }
@@ -148,16 +168,24 @@ struct StreamDetailView: View {
                 } label: {
                     HStack {
                         Spacer()
-                        Label(started ? "已加入下载队列" : "开始下载", systemImage: started ? "checkmark.circle.fill" : "arrow.down.circle.fill")
-                            .font(.headline)
+                        Label(
+                            started ? "已加入下载队列"
+                                : (stream.kind == .hls ? "开始下载" : (stream.kind == .dash ? "DASH 暂不支持" : "直接下载")),
+                            systemImage: started ? "checkmark.circle.fill" : "arrow.down.circle.fill"
+                        )
+                        .font(.headline)
                         Spacer()
                     }
                     .padding(.vertical, 6)
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(isLoadingPlaylist || (playlist?.isMaster == true && selectedVariantURL == nil))
+                .disabled(stream.kind == .dash || isLoadingPlaylist || (stream.kind == .hls && playlist?.isMaster == true && selectedVariantURL == nil))
             } footer: {
-                Text("下载过程中可以切到「下载」页看进度；分片会随时落盘，中断后重试会续传已下载部分。")
+                Text(stream.kind == .hls
+                     ? "下载过程中可以切到「下载」页看进度；分片会随时落盘，中断后重试会续传已下载部分。"
+                     : (stream.kind == .dash
+                        ? "DASH 暂不支持下载。"
+                        : "直链文件边下边存，可暂停、可续传；完成后在「下载」页分享或保存。"))
             }
         }
         .listStyle(.insetGrouped)
@@ -211,7 +239,37 @@ struct StreamDetailView: View {
         }
     }
 
+    /// 生成可直接在电脑终端执行的 curl 命令，方便把嗅探到的地址丢给外部工具。
+    private func curlCommand() -> String {
+        let target = selectedVariantURL ?? stream.url
+        var lines: [String] = []
+        lines.append("curl -L --fail --retry 3 \\")
+        lines.append("  -A \"\(HLSClient.userAgent)\" \\")
+        if let referer {
+            lines.append("  -e \"\(referer)\" \\")
+        }
+        let name = sanitizeFileName(stream.displayTitle)
+        lines.append("  -o \"\(name).ts\" \\")
+        lines.append("  \"\(target.absoluteString)\"")
+        return lines.joined(separator: "\n")
+    }
+
     private func startDownload() {
+        guard stream.kind != .dash else { return }
+        if stream.kind == .file {
+            store.startDirect(
+                url: stream.url,
+                title: stream.displayTitle,
+                referer: referer,
+                saveToPhotos: saveToPhotos
+            )
+            started = true
+            store.toast = "已开始下载直链文件"
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                started = false
+            }
+            return
+        }
         let variant = selectedVariantURL
         store.concurrency = concurrency
         let title = stream.displayTitle

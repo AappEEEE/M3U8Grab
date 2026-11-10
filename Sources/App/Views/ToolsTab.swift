@@ -9,6 +9,7 @@ struct ToolsTab: View {
 
     @State private var showClearCacheConfirm = false
     @State private var clearing = false
+    @State private var copiedBookmarklet = false
     @State private var fileCount = 0
     @State private var totalSize: Int64 = 0
 
@@ -88,6 +89,30 @@ struct ToolsTab: View {
                 }
 
                 Section {
+                    Button {
+                        copyToPasteboard(Bookmarklet.code)
+                        copiedBookmarklet = true
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { copiedBookmarklet = false }
+                    } label: {
+                        Label(copiedBookmarklet ? "已复制，去 Safari 新建书签" : "复制书签小工具代码",
+                              systemImage: copiedBookmarklet ? "checkmark.circle.fill" : "bookmark")
+                    }
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text("1. 在 Safari 打开任意网页，点分享 › 添加书签")
+                        Text("2. 书签地址换成刚复制的代码（以 javascript: 开头）")
+                        Text("3. 播放视频后点该书签，页面右下角会出现资源面板")
+                        Text("4. 点条目复制链接，切回本 App 自动识别并提示加入")
+                    }
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .padding(.vertical, 2)
+                } header: {
+                    Text("Safari 悬浮球（书签版，免扩展）")
+                } footer: {
+                    Text("LiveContainer 里运行的 App 不会把扩展注册进 Safari，书签小工具绕开这个限制：它完全在网页里执行，不需要扩展、不需要签名权限。使用前请在下面开启「识别剪贴板里的 M3U8 链接」。")
+                }
+
+                Section {
                     VStack(alignment: .leading, spacing: 6) {
                         Text("1. 设置 › Safari 浏览器 › 扩展 › M3U8 Grab 打开")
                         Text("2. 在 Safari 里播放视频，点地址栏左侧的扩展图标")
@@ -98,7 +123,7 @@ struct ToolsTab: View {
                 } header: {
                     Text("Safari 扩展")
                 } footer: {
-                    Text("用免费 Apple ID 自签安装时，扩展可能不显示；内置浏览器嗅探不依赖扩展，功能完全一样。")
+                    Text("用免费 Apple ID 自签安装时，扩展可能不显示；内置浏览器右下角悬浮球与书签版不依赖扩展，功能完全一样。")
                 }
 
                 Section("关于") {

@@ -13,6 +13,8 @@ final class DownloadJob: ObservableObject, Identifiable {
     let format: OutputFormat
     let concurrency: Int
     let createdAt: Date
+    /// 直链（mp4/mp3 等）任务：不分片、不解密，单文件下完直接导出。
+    let isDirect: Bool
     var saveToPhotos: Bool
 
     @Published private(set) var title: String
@@ -44,7 +46,7 @@ final class DownloadJob: ObservableObject, Identifiable {
     private var runBytes: Int64 = 0
     private var speedSamples: [(time: TimeInterval, bytes: Int64)] = []
 
-    init(id: UUID = UUID(), title: String, sourceURL: URL, variantURL: URL? = nil, inlineText: String? = nil, referer: String? = nil, format: OutputFormat = .mp4, saveToPhotos: Bool = false, concurrency: Int = 8, createdAt: Date = Date()) {
+    init(id: UUID = UUID(), title: String, sourceURL: URL, variantURL: URL? = nil, inlineText: String? = nil, referer: String? = nil, format: OutputFormat = .mp4, saveToPhotos: Bool = false, concurrency: Int = 8, createdAt: Date = Date(), isDirect: Bool = false) {
         self.id = id
         self.title = title
         self.sourceURL = sourceURL
@@ -55,6 +57,7 @@ final class DownloadJob: ObservableObject, Identifiable {
         self.saveToPhotos = saveToPhotos
         self.concurrency = max(1, min(concurrency, 16))
         self.createdAt = createdAt
+        self.isDirect = isDirect
         self.workspace = Paths.workspaces.appendingPathComponent(id.uuidString, isDirectory: true)
     }
 
@@ -169,7 +172,7 @@ final class DownloadJob: ObservableObject, Identifiable {
             etaSeconds = nil
             phase = .merging
             progress = 0.88
-            statusText = "合并 \(totalSegments) 个分片…"
+            statusText = isDirect ? "整理文件…" : "合并 \(totalSegments) 个分片…"
             onFinish?(self)
 
             // 最终产物先保存在工作目录，取消或进程退出时不留下半个成品。
@@ -212,6 +215,13 @@ final class DownloadJob: ObservableObject, Identifiable {
 
     private func loadPlaylist() async throws -> HLSPlaylist {
         if let playlistPlan { return playlistPlan }
+        if isDirect {
+            // 单个直链就是“一个分片”，复用同一套断点、进度与取消逻辑。
+            let segment = HLSSegment(url: sourceURL, duration: 0, sequence: 0, byteRange: nil, key: nil, map: nil, title: title)
+            let playlist = HLSPlaylist(url: sourceURL, isMaster: false, variants: [], segments: [segment], targetDuration: 0, playlistType: nil, ended: true)
+            playlistPlan = playlist
+            return playlist
+        }
         let snapshot = workspace.appendingPathComponent("playlist.json")
         if let data = try? Data(contentsOf: snapshot),
            let saved = try? JSONDecoder().decode(HLSPlaylist.self, from: data), !saved.segments.isEmpty {
@@ -371,6 +381,14 @@ final class DownloadJob: ObservableObject, Identifiable {
 
     private func assemble(_ playlist: HLSPlaylist) async throws -> URL {
         let files = playlist.segments.indices.map { segmentURL($0) }
+        if isDirect {
+            guard let first = files.first else { throw DownloadError.emptyPlaylist }
+            let ext = sourceURL.pathExtension.isEmpty ? "mp4" : sourceURL.pathExtension.lowercased()
+            let target = workspace.appendingPathComponent("direct.\(ext)")
+            try? FileManager.default.removeItem(at: target)
+            try FileManager.default.moveItem(at: first, to: target)
+            return target
+        }
         if playlist.hasInitMap {
             var orderedFiles: [URL] = []
             var previousMap: HLSInitMap?
@@ -446,6 +464,7 @@ struct JobRecord: Codable {
     var createdAt: Date
     var phase: DownloadPhase
     var duration: Double
+    var isDirect: Bool? = nil
 }
 
 extension DownloadJob {
@@ -474,6 +493,6 @@ extension DownloadJob {
         statusText = completedSegments > 0 ? "已恢复 \(completedSegments)/\(totalSegments) 个分片，点击继续" : "点击继续下载"
     }
     func makeRecord() -> JobRecord {
-        JobRecord(id: id, title: title, sourceURL: sourceURL.absoluteString, variantURL: variantURL?.absoluteString, inlineText: inlineText, referer: referer, saveToPhotos: saveToPhotos, outputPath: outputURL?.path, format: format, createdAt: createdAt, phase: phase, duration: duration)
+        JobRecord(id: id, title: title, sourceURL: sourceURL.absoluteString, variantURL: variantURL?.absoluteString, inlineText: inlineText, referer: referer, saveToPhotos: saveToPhotos, outputPath: outputURL?.path, format: format, createdAt: createdAt, phase: phase, duration: duration, isDirect: isDirect)
     }
 }

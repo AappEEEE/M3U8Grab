@@ -24,7 +24,7 @@ struct RootView: View {
 
     var body: some View {
         TabView(selection: $selectedTab) {
-            BrowserTab(engine: engine, sniffer: sniffer, selectedTab: $selectedTab)
+            BrowserTab(engine: engine, sniffer: sniffer, store: store, selectedTab: $selectedTab)
                 .tabItem {
                     Label("浏览器", systemImage: "safari")
                 }
@@ -172,9 +172,14 @@ struct RootView: View {
 
     private func addToSniffer(urlString: String, pageURL: String?, title: String?) {
         let lowered = urlString.lowercased()
-        let kind: StreamKind = (lowered.contains(".m3u8") || lowered.contains(".m3u"))
-            ? .hls
-            : .file
+        let kind: StreamKind
+        if lowered.contains(".mpd") {
+            kind = .dash
+        } else if lowered.contains(".m3u8") || lowered.contains(".m3u") {
+            kind = .hls
+        } else {
+            kind = .file
+        }
         sniffer.add(
             urlString: urlString,
             kind: kind,

@@ -27,8 +27,13 @@ final class Sniffer: ObservableObject {
     func ingest(message: [String: Any]) {
         guard isSniffingEnabled else { return }
         guard let rawURL = message["url"] as? String else { return }
-        let kindString = (message["kind"] as? String) ?? "hls"
-        let kind: StreamKind = (kindString == "file") ? .file : .hls
+        let kindString = ((message["kind"] as? String) ?? "hls").lowercased()
+        let kind: StreamKind
+        switch kindString {
+        case "dash", "mpd": kind = .dash
+        case "file": kind = .file
+        default: kind = .hls
+        }
 
         let pageURLString = message["pageURL"] as? String
         let pageTitle = (message["pageTitle"] as? String) ?? ""

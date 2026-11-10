@@ -37,6 +37,21 @@ final class DownloadStore: ObservableObject {
         return job
     }
 
+    @discardableResult
+    func startDirect(url: URL, title: String, referer: String?, saveToPhotos: Bool) -> DownloadJob {
+        let job = DownloadJob(
+            title: sanitizeFileName(title),
+            sourceURL: url,
+            referer: referer,
+            format: .mp4,
+            saveToPhotos: saveToPhotos || autoSaveToPhotos,
+            concurrency: 1,
+            isDirect: true
+        )
+        enqueue(job)
+        return job
+    }
+
     private func enqueue(_ job: DownloadJob) {
         job.onFinish = { [weak self] _ in self?.persist() }
         observe(job)
@@ -128,8 +143,9 @@ final class DownloadStore: ObservableObject {
                 referer: record.referer,
                 format: record.format,
                 saveToPhotos: record.saveToPhotos ?? false,
-                concurrency: concurrency,
-                createdAt: record.createdAt
+                concurrency: record.isDirect == true ? 1 : concurrency,
+                createdAt: record.createdAt,
+                isDirect: record.isDirect ?? false
             )
             job.restoreDownloadState(segmentURLs: record.segmentURLs, retryURLs: record.retryURLs)
             if let path = record.outputPath, FileManager.default.fileExists(atPath: path) {

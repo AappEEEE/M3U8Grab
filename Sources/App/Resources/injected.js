@@ -9,8 +9,9 @@
 
   var HANDLER = 'm3u8grab';
   var seen = Object.create(null);
-  var HLS_RE = /\.m3u8(\?|#|$)/i;
-  var FILE_RE = /\.(mp4|m4v|mov|ts|flv|mkv|webm)(\?|#|$)/i;
+  var HLS_RE = /\.(m3u8|m3u)(\?|#|$)/i;
+  var DASH_RE = /\.mpd(\?|#|$)/i;
+  var FILE_RE = /\.(mp4|m4v|mov|ts|flv|mkv|webm|mp3|m4a|aac|ogg|wav|opus)(\?|#|$)/i;
 
   function handlerAvailable() {
     return !!(window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers[HANDLER]);
@@ -18,6 +19,7 @@
 
   function classify(url) {
     if (HLS_RE.test(url)) { return 'hls'; }
+    if (DASH_RE.test(url)) { return 'dash'; }
     if (FILE_RE.test(url)) { return 'file'; }
     return null;
   }
@@ -57,9 +59,9 @@
   function scanText(text) {
     if (!text || text.length > 4000000) { return; }
     // 有些站点把 playlist 地址拼在 JSON / 内联脚本里，用宽松匹配兜住
-    var re = /https?:\/\/[^\s"'\\<>()]+?\.m3u8[^\s"'\\<>()]*/gi;
+    var re = /https?:\/\/[^\s"'\\<>()]+?\.(m3u8|m3u|mpd)[^\s"'\\<>()]*/gi;
     var m;
-    while ((m = re.exec(text)) !== null) { report(m[0], 'hls'); }
+    while ((m = re.exec(text)) !== null) { report(m[0]); }
   }
 
   // ---------- fetch ----------
@@ -148,7 +150,7 @@
 
   // ---------- 媒体元素扫描 ----------
   function scanMedia() {
-    var nodes = document.querySelectorAll('video, audio, source, a[href], link[href]');
+    var nodes = document.querySelectorAll('video, audio, source, track, a[href], link[href], [data-url], [data-video]');
     for (var i = 0; i < nodes.length; i++) {
       var el = nodes[i];
       try {
@@ -156,6 +158,10 @@
         if (el.currentSrc) { report(el.currentSrc); }
         var ds = el.getAttribute && el.getAttribute('data-src');
         if (ds) { report(ds); }
+        var du = el.getAttribute && el.getAttribute('data-url');
+        if (du) { report(du); }
+        var dv = el.getAttribute && el.getAttribute('data-video');
+        if (dv) { report(dv); }
         var href = el.getAttribute && el.getAttribute('href');
         if (href) { report(href, null); }
       } catch (e) { /* 忽略 */ }

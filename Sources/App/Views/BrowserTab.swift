@@ -4,10 +4,15 @@ import WebKit
 struct BrowserTab: View {
     @ObservedObject var engine: BrowserEngine
     @ObservedObject var sniffer: Sniffer
+    @ObservedObject var store: DownloadStore
     @Binding var selectedTab: Int
 
     @State private var editingAddress = false
     @State private var showSniffedToast = false
+    @State private var showPanel = false
+    @AppStorage("floatBall.x") private var ballX: Double = 0.86
+    @AppStorage("floatBall.y") private var ballY: Double = 0.76
+    @State private var dragCenter: CGPoint?
 
     var body: some View {
         NavigationView {
@@ -21,7 +26,12 @@ struct BrowserTab: View {
 
                 ZStack(alignment: .bottom) {
                     WebViewContainer(engine: engine)
-                        .ignoresSafeArea(.container, edges: .bottom)
+
+                    GeometryReader { proxy in
+                        if !sniffer.streams.isEmpty {
+                            floatingBall(in: proxy.size)
+                        }
+                    }
 
                     VStack(spacing: 8) {
                         if let playlist = engine.interceptedPlaylist {
@@ -37,8 +47,9 @@ struct BrowserTab: View {
                     .padding(.horizontal, 12)
                     .padding(.bottom, 10)
                 }
-
-                bottomToolbar
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    bottomToolbar
+                }
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -70,6 +81,9 @@ struct BrowserTab: View {
             }
         }
         .navigationViewStyle(.stack)
+        .sheet(isPresented: $showPanel) {
+            SniffedPanelSheet(engine: engine, sniffer: sniffer, store: store, selectedTab: $selectedTab)
+        }
         .onChange(of: sniffer.streams.count) { newValue in
             guard newValue > 0 else { return }
             withAnimation(.easeOut(duration: 0.2)) { showSniffedToast = true }
@@ -77,6 +91,78 @@ struct BrowserTab: View {
                 withAnimation(.easeIn(duration: 0.2)) { showSniffedToast = false }
             }
         }
+    }
+
+    // MARK: - 悬浮球
+
+    /// 页面内可拖动的资源球：只在发现资源时出现，位置会记住。
+    private func floatingBall(in size: CGSize) -> some View {
+        let radius: CGFloat = 26
+        let center = dragCenter ?? CGPoint(
+            x: min(max(radius + 6, ballX * size.width), size.width - radius - 6),
+            y: min(max(radius + 6, ballY * size.height), size.height - radius - 6)
+        )
+        return ZStack {
+            Circle()
+                .fill(
+                    LinearGradient(
+                        colors: [Color.accentColor, Color(red: 0.36, green: 0.36, blue: 0.94)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .overlay(
+                    // 顶部高光 + 细描边，做出玻璃球的通透感
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: [Color.white.opacity(0.42), Color.white.opacity(0.02)],
+                                startPoint: .top,
+                                endPoint: .center
+                            )
+                        )
+                )
+                .overlay(Circle().strokeBorder(Color.white.opacity(0.38), lineWidth: 0.9))
+                .frame(width: radius * 2, height: radius * 2)
+                .shadow(color: Color.black.opacity(0.24), radius: 9, x: 0, y: 5)
+
+            Image(systemName: "play.rectangle.on.rectangle.fill")
+                .font(.system(size: 19, weight: .semibold))
+                .foregroundColor(.white)
+
+            Text("\(sniffer.streams.count)")
+                .font(.system(size: 10, weight: .bold))
+                .foregroundColor(.white)
+                .padding(.horizontal, 5)
+                .padding(.vertical, 2)
+                .background(Capsule().fill(Color.red))
+                .overlay(Capsule().stroke(Color.white.opacity(0.9), lineWidth: 1))
+                .offset(x: 17, y: -18)
+        }
+        .frame(width: radius * 2, height: radius * 2)
+        .contentShape(Circle())
+        .position(center)
+        .onTapGesture { showPanel = true }
+        .gesture(
+            DragGesture(minimumDistance: 8)
+                .onChanged { value in
+                    dragCenter = CGPoint(
+                        x: min(max(radius + 6, value.location.x), size.width - radius - 6),
+                        y: min(max(radius + 6, value.location.y), size.height - radius - 6)
+                    )
+                }
+                .onEnded { _ in
+                    guard let end = dragCenter, size.width > 0, size.height > 0 else { return }
+                    ballX = Double(end.x / size.width)
+                    ballY = Double(end.y / size.height)
+                    dragCenter = nil
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                }
+        )
+        .accessibilityLabel("本页资源 \(sniffer.streams.count) 个")
+        .accessibilityHint("打开资源列表")
+        .transition(.scale.combined(with: .opacity))
+        .animation(.easeOut(duration: 0.18), value: sniffer.streams.count)
     }
 
     // MARK: - 地址栏
@@ -122,11 +208,10 @@ struct BrowserTab: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 9)
-        .background(Color(.secondarySystemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .glassSurface(cornerRadius: 19)
         .padding(.horizontal, 12)
-        .padding(.top, 6)
-        .padding(.bottom, 6)
+        .padding(.top, 8)
+        .padding(.bottom, 8)
     }
 
     // MARK: - 底部工具条
@@ -143,9 +228,11 @@ struct BrowserTab: View {
                 shareCurrentPage()
             }
         }
-        .padding(.vertical, 8)
-        .background(.regularMaterial)
-        .overlay(Divider(), alignment: .top)
+        .padding(.vertical, 6)
+        .padding(.horizontal, 6)
+        .glassSurface(cornerRadius: 24)
+        .padding(.horizontal, 20)
+        .padding(.bottom, 6)
     }
 
     private func toolbarButton(_ systemName: String, enabled: Bool, action: @escaping () -> Void) -> some View {
@@ -164,14 +251,14 @@ struct BrowserTab: View {
     private func interceptedBanner(url: URL) -> some View {
         HStack(spacing: 10) {
             Image(systemName: "waveform.path.ecg")
-                .foregroundColor(.white)
+                .foregroundColor(.accentColor)
             VStack(alignment: .leading, spacing: 1) {
                 Text("检测到 M3U8 播放列表")
                     .font(.footnote.weight(.semibold))
-                    .foregroundColor(.white)
+                    .foregroundColor(.primary)
                 Text(url.lastPathComponent.isEmpty ? url.host ?? "" : url.lastPathComponent)
                     .font(.caption2)
-                    .foregroundColor(.white.opacity(0.8))
+                    .foregroundColor(.secondary)
                     .lineLimit(1)
             }
             Spacer()
@@ -182,20 +269,19 @@ struct BrowserTab: View {
             .font(.footnote.weight(.bold))
             .padding(.horizontal, 10)
             .padding(.vertical, 5)
-            .background(Color.white.opacity(0.22))
-            .foregroundColor(.white)
+            .background(Color.accentColor.opacity(0.16))
+            .foregroundColor(.accentColor)
             .clipShape(Capsule())
             Button {
                 engine.interceptedPlaylist = nil
             } label: {
                 Image(systemName: "xmark")
                     .font(.caption)
-                    .foregroundColor(.white.opacity(0.8))
+                    .foregroundColor(.secondary)
             }
         }
         .padding(10)
-        .background(Color.accentColor.opacity(0.95))
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .glassSurface(cornerRadius: 16, tint: .accentColor)
         .onTapGesture {
             guard let playlist = engine.interceptedPlaylist else { return }
             engine.notePlaylist(playlist)
@@ -220,16 +306,15 @@ struct BrowserTab: View {
             }
         }
         .padding(10)
-        .background(.regularMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .glassSurface(cornerRadius: 16)
     }
 
     private func sniffToast(_ stream: SniffedStream) -> some View {
         HStack(spacing: 8) {
-            Image(systemName: stream.kind == .hls ? "play.rectangle.on.rectangle" : "doc")
+            Image(systemName: stream.kind.symbol)
                 .foregroundColor(.accentColor)
             VStack(alignment: .leading, spacing: 1) {
-                Text("已嗅探到 \(stream.kind == .hls ? "M3U8" : "媒体文件")")
+                Text("已嗅探到 \(stream.kind.badge)")
                     .font(.caption.weight(.semibold))
                 Text(stream.url.lastPathComponent.isEmpty ? (stream.url.host ?? "") : stream.url.lastPathComponent)
                     .font(.caption2)
@@ -241,8 +326,7 @@ struct BrowserTab: View {
                 .font(.caption.weight(.bold))
         }
         .padding(10)
-        .background(.regularMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .glassSurface(cornerRadius: 16)
         .onTapGesture { selectedTab = 1 }
     }
 

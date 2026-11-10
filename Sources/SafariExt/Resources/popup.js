@@ -85,7 +85,7 @@
 
       var badge = document.createElement('span');
       badge.className = 'badge';
-      badge.textContent = item.kind === 'hls' ? 'M3U8' : '文件';
+      badge.textContent = item.kind === 'hls' ? 'M3U8' : (item.kind === 'dash' ? 'DASH' : '文件');
 
       var name = document.createElement('span');
       name.className = 'name';

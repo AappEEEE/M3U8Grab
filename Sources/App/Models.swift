@@ -4,14 +4,36 @@ import Foundation
 
 enum StreamKind: String, Codable {
     case hls
+    case dash
     case file
 
     var displayName: String {
         switch self {
         case .hls: return "HLS"
+        case .dash: return "DASH"
         case .file: return "文件"
         }
     }
+
+    /// 列表角标文案。
+    var badge: String {
+        switch self {
+        case .hls: return "M3U8"
+        case .dash: return "DASH"
+        case .file: return "文件"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .hls: return "list.bullet.rectangle.play"
+        case .dash: return "waveform.path"
+        case .file: return "doc.fill"
+        }
+    }
+
+    /// 需要解析播放列表的类型（HLS 才能完整下载）。
+    var isPlaylist: Bool { self != .file }
 }
 
 struct SniffedStream: Identifiable, Hashable, Codable {

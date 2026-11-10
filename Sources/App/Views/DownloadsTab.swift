@@ -39,6 +39,13 @@ struct DownloadsTab: View {
                         .pickerStyle(.segmented)
                         .padding(.horizontal, 16)
                         .padding(.vertical, 8)
+                        .background(.ultraThinMaterial)
+                        .overlay(
+                            Rectangle()
+                                .fill(Color.primary.opacity(0.06))
+                                .frame(height: 0.5),
+                            alignment: .bottom
+                        )
 
                         if filteredJobs.isEmpty {
                             Text("这个分类里还没有任务")
@@ -51,12 +58,16 @@ struct DownloadsTab: View {
                                     Section {
                                         HStack(spacing: 8) {
                                             ProgressView().scaleEffect(0.8)
-                                            Text("\(store.activeCount) 个任务 · 总速度 \(formatBytes(Int64(store.totalSpeed)))/s")
-                                                .font(.footnote.monospacedDigit())
-                                                .foregroundColor(.secondary)
+                                            Text("\(store.activeCount) 个任务")
+                                                .font(.footnote.weight(.medium))
+                                            GlassStatPill(
+                                                systemImage: "speedometer",
+                                                text: "\(formatBytes(Int64(store.totalSpeed)))/s"
+                                            )
                                             Spacer()
                                         }
                                         .frame(maxWidth: .infinity, alignment: .leading)
+                                        .listRowBackground(Color.clear)
                                     }
                                 }
                                 Section {

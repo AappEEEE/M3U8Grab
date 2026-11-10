@@ -8,8 +8,9 @@
   window.__m3u8grabExtInstalled = true;
 
   var api = (typeof browser !== 'undefined' && browser.runtime) ? browser : chrome;
-  var HLS_RE = /\.m3u8(\?|#|$)/i;
-  var FILE_RE = /\.(mp4|m4v|mov|ts)(\?|#|$)/i;
+  var HLS_RE = /\.(m3u8|m3u)(\?|#|$)/i;
+  var DASH_RE = /\.mpd(\?|#|$)/i;
+  var FILE_RE = /\.(mp4|m4v|mov|ts|flv|mkv|webm|mp3|m4a|aac|ogg|wav|opus)(\?|#|$)/i;
   var seen = Object.create(null);
 
   // 本页嗅到的 m3u8（最新的在前，最多 30 条）
@@ -32,7 +33,7 @@
   function report(raw) {
     var abs = absolute(raw);
     if (!abs) { return; }
-    var kind = HLS_RE.test(abs) ? 'hls' : (FILE_RE.test(abs) ? 'file' : null);
+    var kind = HLS_RE.test(abs) ? 'hls' : (DASH_RE.test(abs) ? 'dash' : (FILE_RE.test(abs) ? 'file' : null));
     if (!kind) { return; }
     if (seen[abs]) { return; }
     seen[abs] = 1;
@@ -301,7 +302,7 @@
         self.addEventListener('load', function () {
           if (self.responseURL) { report(self.responseURL); }
           if (typeof self.responseText === 'string' && self.responseText.indexOf('#EXTM3U') >= 0) {
-            var re = /https?:\/\/[^\s"'\\<>()]+?\.m3u8[^\s"'\\<>()]*/gi;
+            var re = /https?:\/\/[^\s"'\\<>()]+?\.(m3u8|m3u|mpd)[^\s"'\\<>()]*/gi;
             var m;
             while ((m = re.exec(self.responseText)) !== null) { report(m[0]); }
           }
