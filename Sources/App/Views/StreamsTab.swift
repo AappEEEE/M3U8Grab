@@ -5,6 +5,7 @@ struct StreamsTab: View {
     @ObservedObject var sniffer: Sniffer
     @ObservedObject var store: DownloadStore
     @Binding var selectedTab: Int
+    @State private var quickTasks: Set<UUID> = []
 
     var body: some View {
         NavigationView {
@@ -23,7 +24,17 @@ struct StreamsTab: View {
                                         store: store
                                     )
                                 } label: {
-                                    StreamRow(stream: stream)
+                                    StreamRow(stream: stream, isPreparing: quickTasks.contains(stream.id))
+                                }
+                                .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                                    if stream.kind == .hls {
+                                        Button {
+                                            Task { await quickDownload(stream) }
+                                        } label: {
+                                            Label("下载", systemImage: "arrow.down.circle")
+                                        }
+                                        .tint(.green)
+                                    }
                                 }
                                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                                     Button(role: .destructive) {
@@ -43,7 +54,7 @@ struct StreamsTab: View {
                         } header: {
                             Text("共 \(sniffer.streams.count) 条 · \(sniffer.hlsCount) 个 M3U8")
                         } footer: {
-                            Text("在「浏览器」里播放视频后，地址会被自动抓取。切换页面不会清空列表。")
+                            Text("在「浏览器」里播放视频后，地址会被自动抓取。右滑可直接下载最高清晰度；切换页面不会清空列表。")
                         }
                     }
                     .listStyle(.insetGrouped)
@@ -79,6 +90,40 @@ struct StreamsTab: View {
         .navigationViewStyle(.stack)
     }
 
+    /// 右滑“下载”：解析播放列表并自动选最高码率，省去进入详情页选清晰度的步骤。
+    @MainActor
+    private func quickDownload(_ stream: SniffedStream) async {
+        guard stream.kind == .hls, !quickTasks.contains(stream.id) else { return }
+        quickTasks.insert(stream.id)
+        defer { quickTasks.remove(stream.id) }
+        let referer = sniffer.referer(for: stream)
+        do {
+            let text = try await HLSClient.getText(url: stream.url, referer: referer)
+            var playlist = try HLSParser.parse(text: text, url: stream.url)
+            var target: URL?
+            if playlist.isMaster {
+                guard let best = playlist.bestVariant else { throw DownloadError.emptyPlaylist }
+                let mediaText = try await HLSClient.getText(url: best.url, referer: referer)
+                playlist = try HLSParser.parse(text: mediaText, url: best.url)
+                target = best.url
+            }
+            guard !playlist.segments.isEmpty else { throw DownloadError.emptyPlaylist }
+            if playlist.usesSampleAES { throw DownloadError.sampleAES }
+            store.startRemote(
+                playlistURL: stream.url,
+                variantURL: target,
+                title: stream.displayTitle,
+                referer: referer,
+                format: .mp4,
+                saveToPhotos: false
+            )
+            store.toast = "已加入下载 · \(playlist.segments.count) 个分片"
+            selectedTab = 2
+        } catch {
+            store.toast = "加入失败：\(error.localizedDescription)"
+        }
+    }
+
     private var emptyState: some View {
         VStack(spacing: 16) {
             Image(systemName: "dot.radiowaves.left.and.right")
@@ -107,6 +152,7 @@ struct StreamsTab: View {
 
 struct StreamRow: View {
     let stream: SniffedStream
+    var isPreparing: Bool = false
 
     var body: some View {
         HStack(spacing: 12) {
@@ -136,9 +182,13 @@ struct StreamRow: View {
                 }
             }
             Spacer(minLength: 4)
-            Text(stream.discoveredAt, style: .time)
-                .font(.caption2)
-                .foregroundColor(.secondary)
+            if isPreparing {
+                ProgressView().controlSize(.small)
+            } else {
+                Text(stream.discoveredAt, style: .time)
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
         }
         .padding(.vertical, 2)
     }

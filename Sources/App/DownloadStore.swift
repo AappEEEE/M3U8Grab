@@ -73,6 +73,21 @@ final class DownloadStore: ObservableObject {
     func saveToPhotos(_ job: DownloadJob) { job.saveToPhotoLibrary() }
     var activeCount: Int { jobs.filter(\.isActive).count }
     var finishedCount: Int { jobs.filter { $0.phase == .finished }.count }
+    /// 所有进行中任务之和，用于列表头部展示总体速度。
+    var totalSpeed: Double { jobs.reduce(0) { $0 + ($1.isActive ? $1.currentSpeed : 0) } }
+    var resumableCount: Int {
+        jobs.filter { $0.phase == .paused || $0.phase == .failed || $0.phase == .cancelled }.count
+    }
+
+    func resumeAll() {
+        for job in jobs where job.phase == .paused || job.phase == .failed || job.phase == .cancelled { job.resume() }
+        persist()
+    }
+
+    func pauseAll() {
+        for job in jobs where job.canPause { job.pause() }
+        persist()
+    }
 
     private struct PersistedState: Codable {
         var concurrency: Int?

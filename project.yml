@@ -1,4 +1,4 @@
-name: M3U8Grab
+﻿name: M3U8Grab
 
 options:
   bundleIdPrefix: com.m3u8grab
@@ -10,8 +10,8 @@ options:
 settings:
   base:
     SWIFT_VERSION: "5.0"
-    MARKETING_VERSION: "1.1.0"
-    CURRENT_PROJECT_VERSION: "2"
+    MARKETING_VERSION: "1.2.0"
+    CURRENT_PROJECT_VERSION: "3"
     IPHONEOS_DEPLOYMENT_TARGET: "15.0"
     ENABLE_BITCODE: "NO"
     SWIFT_OPTIMIZATION_LEVEL: "-O"

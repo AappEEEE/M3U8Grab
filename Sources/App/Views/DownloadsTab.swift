@@ -5,53 +5,98 @@ struct SharedFile: Identifiable {
     let url: URL
 }
 
+enum DownloadFilter: String, CaseIterable, Identifiable {
+    case all, active, finished
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .all: return "全部"
+        case .active: return "进行中"
+        case .finished: return "已完成"
+        }
+    }
+}
+
 struct DownloadsTab: View {
     @ObservedObject var store: DownloadStore
     @ObservedObject var sniffer: Sniffer
     @State private var selectedJob: DownloadJob?
     @State private var shareItem: SharedFile?
     @State private var showSettings = false
+    @State private var filter: DownloadFilter = .all
 
     var body: some View {
         NavigationView {
             Group {
                 if store.jobs.isEmpty { emptyState }
                 else {
-                    List {
-                        if store.activeCount > 0 {
-                            Section {
-                                HStack(spacing: 8) {
-                                    ProgressView().scaleEffect(0.8)
-                                    Text("正在下载 \(store.activeCount) 个任务")
-                                        .font(.footnote).foregroundColor(.secondary)
-                                    Spacer()
-                                }
-                                .frame(maxWidth: .infinity, alignment: .leading)
+                    VStack(spacing: 0) {
+                        Picker("筛选", selection: $filter) {
+                            ForEach(DownloadFilter.allCases) { option in
+                                Text(option.title).tag(option)
                             }
                         }
-                        Section {
-                            ForEach(store.jobs) { job in
-                                JobRow(job: job, store: store) { selectedJob = job }
-                                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                        Button(role: .destructive) { store.remove(job, deleteFile: true) } label: { Label("删除", systemImage: "trash") }
-                                            .disabled(job.isStopping)
-                                        if job.phase == .finished, let url = job.outputURL {
-                                            Button { shareItem = SharedFile(url: url) } label: { Label("分享", systemImage: "square.and.arrow.up") }.tint(.blue)
+                        .pickerStyle(.segmented)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+
+                        if filteredJobs.isEmpty {
+                            Text("这个分类里还没有任务")
+                                .font(.footnote)
+                                .foregroundColor(.secondary)
+                                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                        } else {
+                            List {
+                                if store.activeCount > 0 {
+                                    Section {
+                                        HStack(spacing: 8) {
+                                            ProgressView().scaleEffect(0.8)
+                                            Text("\(store.activeCount) 个任务 · 总速度 \(formatBytes(Int64(store.totalSpeed)))/s")
+                                                .font(.footnote.monospacedDigit())
+                                                .foregroundColor(.secondary)
+                                            Spacer()
                                         }
+                                        .frame(maxWidth: .infinity, alignment: .leading)
                                     }
+                                }
+                                Section {
+                                    ForEach(filteredJobs) { job in
+                                        JobRow(job: job, store: store) { selectedJob = job }
+                                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                                Button(role: .destructive) { store.remove(job, deleteFile: true) } label: { Label("删除", systemImage: "trash") }
+                                                    .disabled(job.isStopping)
+                                                if job.phase == .finished, let url = job.outputURL {
+                                                    Button { shareItem = SharedFile(url: url) } label: { Label("分享", systemImage: "square.and.arrow.up") }.tint(.blue)
+                                                }
+                                            }
+                                            .swipeActions(edge: .leading, allowsFullSwipe: false) {
+                                                Button {
+                                                    copyToPasteboard(job.sourceURL.absoluteString)
+                                                    store.toast = "已复制下载地址"
+                                                } label: { Label("复制地址", systemImage: "doc.on.doc") }.tint(.indigo)
+                                            }
+                                    }
+                                } footer: {
+                                    Text("文件保存在「文件」App › 我的 iPhone › M3U8 Grab › Downloads。")
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                }
                             }
-                        } footer: {
-                            Text("文件保存在「文件」App › 我的 iPhone › M3U8 Grab › Downloads。")
-                                .frame(maxWidth: .infinity, alignment: .leading)
+                            .listStyle(.insetGrouped)
                         }
                     }
-                    .listStyle(.insetGrouped)
                 }
             }
             .navigationTitle("下载")
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Menu {
+                        if store.resumableCount > 0 {
+                            Button { store.resumeAll() } label: { Label("继续全部（\(store.resumableCount)）", systemImage: "play.circle") }
+                        }
+                        if store.activeCount > 0 {
+                            Button { store.pauseAll() } label: { Label("暂停全部", systemImage: "pause.circle") }
+                        }
+                        Divider()
                         Button { store.clearFinished() } label: { Label("清理已完成任务", systemImage: "trash") }
                         Button { showSettings = true } label: { Label("设置", systemImage: "gearshape") }
                     } label: { Image(systemName: "ellipsis.circle") }
@@ -69,6 +114,14 @@ struct DownloadsTab: View {
             }
         }
         .navigationViewStyle(.stack)
+    }
+
+    private var filteredJobs: [DownloadJob] {
+        switch filter {
+        case .all: return store.jobs
+        case .active: return store.jobs.filter { $0.isActive || $0.phase == .paused || $0.phase == .failed }
+        case .finished: return store.jobs.filter { $0.phase == .finished }
+        }
     }
 
     private var emptyState: some View {
@@ -112,24 +165,28 @@ struct JobRow: View {
                     .fixedSize()
                 Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundColor(.secondary)
             }
-            if job.phase.isActive || job.phase == .paused { ProgressView(value: job.progress).progressViewStyle(.linear) }
-            HStack(alignment: .center, spacing: 8) {
+            if job.phase == .merging {
+                // 合并阶段总字节数已知但耗时不定，用不确定进度条避免看起来卡死。
+                ProgressView().progressViewStyle(.linear)
+            } else if job.phase.isActive || job.phase == .paused {
+                ProgressView(value: job.progress).progressViewStyle(.linear)
+            }
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(job.statusText).font(.caption2).foregroundColor(job.phase == .failed ? .red : .secondary).lineLimit(2)
-                    if job.phase == .downloading {
-                        Label(job.speedText, systemImage: "arrow.down")
-                            .font(.caption2.monospacedDigit()).foregroundColor(.secondary)
-                        if let eta = job.etaText {
-                            Text("剩余 \(eta)").font(.caption2.monospacedDigit()).foregroundColor(.secondary)
-                        }
-                    }
+                    // 分片数、速度、剩余时间合并成一行，数字等宽避免跳动。
+                    Text(job.metricsText)
+                        .font(.caption2.monospacedDigit())
+                        .foregroundColor(job.phase == .failed ? .red : .secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.72)
+                        .truncationMode(.tail)
                     if let error = job.errorText, job.phase != .finished {
                         Text(error).font(.caption2).foregroundColor(.red).lineLimit(2)
                     }
                 }
                 Spacer(minLength: 4)
                 if job.phase == .finished {
-                    Text(job.outputSizeText).font(.caption2.monospacedDigit()).foregroundColor(.secondary)
+                    Text(job.outputSizeText).font(.caption2.monospacedDigit()).foregroundColor(.secondary).fixedSize()
                 }
             }
         }
@@ -203,13 +260,15 @@ struct JobDetailSheet: View {
                     labeled("格式", job.format.displayName)
                     labeled("状态", job.phase.displayName)
                     if job.duration > 0 { labeled("时长", formatDuration(job.duration)) }
-                    if job.totalSegments > 0 { labeled("分片", "\(job.totalSegments)") }
+                    if job.totalSegments > 0 { labeled("分片", "\(job.completedSegmentCount)/\(job.totalSegments)") }
                     if job.phase.isActive || job.phase == .paused || job.phase == .failed {
                         labeled("进度", String(format: "%.1f%%", job.progress * 100))
                         ProgressView(value: job.progress).progressViewStyle(.linear)
                     }
                     labeled("详情", job.statusText)
-                    if job.phase == .downloading { labeled("速度", job.speedText); if let eta = job.etaText { labeled("预计剩余", eta) } }
+                    if job.phase == .downloading {
+                        labeled("速度 · 剩余", [job.speedText, job.etaText].compactMap { $0 }.joined(separator: " · "))
+                    }
                     if job.phase == .finished { labeled("大小", job.outputSizeText) }
                 }
                 if let error = job.errorText {
@@ -232,6 +291,7 @@ struct JobDetailSheet: View {
                     if job.phase == .finished, let url = job.outputURL {
                         Button { share = SharedFile(url: url) } label: { Label("分享 / 导出", systemImage: "square.and.arrow.up") }
                         Button { store.saveToPhotos(job) } label: { Label(job.savedToPhotos ? "已保存到相册" : "保存到相册", systemImage: "photo.on.rectangle") }.disabled(job.savedToPhotos)
+                        Button { openFolderInFiles(Paths.downloads) } label: { Label("在「文件」中查看", systemImage: "folder") }
                     }
                     Button(role: .destructive) { store.remove(job, deleteFile: true); dismiss() } label: { Label("删除任务与文件", systemImage: "trash") }
                         .disabled(job.isStopping)

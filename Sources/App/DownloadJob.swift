@@ -64,13 +64,30 @@ final class DownloadJob: ObservableObject, Identifiable {
         guard let outputURL else { return "" }
         return formatBytes(FileManager.default.fileSize(at: outputURL))
     }
-    var speedText: String { "\(formatBytes(Int64(max(0, currentSpeed))))/秒" }
+    var speedText: String { "\(formatBytes(Int64(max(0, currentSpeed))))/s" }
     var etaText: String? {
         guard let etaSeconds, etaSeconds.isFinite, etaSeconds >= 0 else { return nil }
         if etaSeconds < 60 { return "约 \(Int(etaSeconds.rounded())) 秒" }
         if etaSeconds < 3600 { return "约 \(Int(etaSeconds / 60)) 分钟" }
         return "约 \(Int(etaSeconds / 3600)) 小时 \(Int(etaSeconds.truncatingRemainder(dividingBy: 3600) / 60)) 分钟"
     }
+    /// 下载列表单行摘要：分片进度 · 已下载 · 速度 · 剩余 · 补片状态。
+    var metricsText: String {
+        guard phase == .downloading || phase == .fetching || phase == .paused || phase == .failed || phase == .merging else {
+            return statusText
+        }
+        var parts: [String] = []
+        if totalSegments > 0 { parts.append("\(completedSegments)/\(totalSegments)") }
+        if downloadedBytes > 0 { parts.append(formatBytes(downloadedBytes)) }
+        if phase == .downloading {
+            parts.append(speedText)
+            if let etaText { parts.append(etaText) }
+        }
+        if deferredSegments > 0 { parts.append("待补 \(deferredSegments)") }
+        if retryRound > 0 { parts.append("第 \(retryRound)/3 轮") }
+        return parts.isEmpty ? statusText : parts.joined(separator: " · ")
+    }
+    var completedSegmentCount: Int { completedSegments }
 
     func start() {
         guard task == nil, phase == .queued else { return }

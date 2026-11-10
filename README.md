@@ -4,7 +4,7 @@
 
 ## 下载
 
-当前源码版本为 **v1.1.0（build 2）**，主 App 与 Safari 扩展使用相同版本。打开 [latest 发布页](https://github.com/AappEEEE/M3U8Grab/releases/tag/latest)，下载稳定命名的 **[M3U8Grab.ipa](https://github.com/AappEEEE/M3U8Grab/releases/download/latest/M3U8Grab.ipa)**；同页的 `sha256.txt` 可校验该 IPA。
+当前源码版本为 **v1.2.0（build 3）**，主 App 与 Safari 扩展使用相同版本。打开 [latest 发布页](https://github.com/AappEEEE/M3U8Grab/releases/tag/latest)，下载稳定命名的 **[M3U8Grab.ipa](https://github.com/AappEEEE/M3U8Grab/releases/download/latest/M3U8Grab.ipa)**；同页的 `sha256.txt` 可校验该 IPA。
 
 IPA 是未签名构建。Sideloadly、AltStore/SideStore 等侧载工具按各自流程用个人 Apple ID/证书签名；免费 Apple ID 的签名通常需要定期刷新。Xcode 安装需在 macOS 从源码构建并配置签名。TrollStore 则按其支持的系统版本和安装流程操作，不要求个人 Apple ID 签名。
 
@@ -14,6 +14,8 @@ IPA 是未签名构建。Sideloadly、AltStore/SideStore 等侧载工具按各�
 - Safari Web Extension：工具栏弹窗列出媒体地址；页面内提供可拖动悬浮球和快速交接到 App 的入口。
 - 下载管理：选择清晰度，AES-128 解密，TS 分片合并、fMP4 直拼，导出 MP4/TS、分享或存入相册。
 - 稳定性：暂停/继续、已完成分片保留、弱网失败分片延后重试、速度与预计剩余时间。
+- 列表效率：分片进度、速度、剩余时间单行显示；按「全部/进行中/已完成」筛选，顶部汇总总速度；支持「继续全部」「暂停全部」。
+- 一键下载：在「嗅探」列表右滑即可自动选择最高清晰度并加入下载。
 - 手动下载：粘贴 M3U8 地址或播放列表文本。
 - 跟随 iOS 深色/浅色外观；无广告、无内购。
 
@@ -51,7 +53,7 @@ LiveContainer 的实例化运行方式不会让 iOS 把其中的 appex 注册成
 ## 构建与发布
 
 - 仓库仅保留一个发布 workflow：`.github/workflows/build-ipa.yml`。推送到 `main`/`master`（仅 README 变化除外）自动构建，也支持在这两个分支手动触发。
-- CI 在 macOS 上运行 HLS 回归测试、XcodeGen 与未签名 iOS Release 构建，打包前检查 App/扩展均为 `1.1.0 (2)`、扩展根目录 manifest 为 `1.1.0`。
+- CI 在 macOS 上运行 HLS 回归测试、XcodeGen 与未签名 iOS Release 构建，打包前检查 App/扩展均为 `1.2.0 (3)`、扩展根目录 manifest 为 `1.2.0`。
 - 验证通过后更新 `latest` 标签到构建提交，覆盖稳定资产 `M3U8Grab.ipa` 与匹配的 `sha256.txt`，并更新发布说明和构建记录；其他分支只构建测试，不发布。
 - 发布任务串行执行，避免并发构建互相覆盖资产。
 

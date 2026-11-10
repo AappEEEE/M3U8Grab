@@ -91,11 +91,11 @@ jobs:
           for bundle in (app, extension):
               with (bundle / 'Info.plist').open('rb') as file:
                   info = plistlib.load(file)
-              assert info['CFBundleShortVersionString'] == '1.1.0', (bundle, info)
-              assert str(info['CFBundleVersion']) == '2', (bundle, info)
+              assert info['CFBundleShortVersionString'] == '1.2.0', (bundle, info)
+              assert str(info['CFBundleVersion']) == '3', (bundle, info)
           with (extension / 'manifest.json').open() as file:
-              assert json.load(file)['version'] == '1.1.0'
-          print('App + Safari extension: 1.1.0 (2); root manifest: 1.1.0')
+              assert json.load(file)['version'] == '1.2.0'
+          print('App + Safari extension: 1.2.0 (3); root manifest: 1.2.0')
           PY
           rm -rf Payload M3U8Grab.ipa
           mkdir -p Payload
@@ -122,13 +122,15 @@ jobs:
           TAG: latest
         run: |
           set -euo pipefail
-          TITLE="M3U8 Grab v1.1.0 (build 2)"
+          TITLE="M3U8 Grab v1.2.0 (build 3)"
           NOTES=$(cat <<EOF
-          ## v1.1.0 · build 2
-          - 下载列表和详情支持暂停/继续、速度与预计剩余时间；合并阶段仅可取消。
-          - 保留已完成分片；失败分片在主体下载结束后以低并发补下，支持恢复任务。
-          - 改善下载页布局与按钮交互；清理已完成任务不会清除暂停或失败任务。
-          - 主 App 和 Safari 扩展版本一致；LiveContainer 内仍仅支持 App 内浏览器嗅探，系统 Safari 扩展需由 iOS 正常安装登记。
+          ## v1.2.0 · build 3
+          - 下载列表把分片进度、速度、剩余时间合并成一行，并启用等宽数字，不再因数字变化左右跳动。
+          - 新增「全部 / 进行中 / 已完成」筛选，列表顶部显示任务数与总速度。
+          - 菜单支持「继续全部」「暂停全部」，失败或暂停的任务可一次恢复。
+          - 嗅探列表右滑即可直接下载最高清晰度，并自动跳到下载页。
+          - 下载任务左滑复制原始地址；合并阶段改用不确定进度条，避免看起来卡死。
+          - 任务详情在下载中合并显示「速度 · 剩余」，并新增「在文件中查看」。
 
           此 IPA 未签名。Sideloadly/AltStore/SideStore 等安装工具需要个人 Apple ID 或签名证书；TrollStore 按其适用系统和安装流程操作。
           稳定下载资产：M3U8Grab.ipa；校验文件：sha256.txt。

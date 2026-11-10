@@ -1,8 +1,8 @@
 {
   "manifest_version": 2,
   "name": "M3U8 Grab",
-  "version": "1.1.0",
-  "description": "抓取当前网页里的 M3U8 播放列表地址，一键复制到 M3U8 Grab App 下载。",
+  "version": "1.2.0",
+  "description": "抓取当前网页里的 M3U8 播放列表地址，一键送到 M3U8 Grab App 下载。",
   "permissions": [
     "activeTab",
     "tabs",
