@@ -109,7 +109,7 @@ struct ToolsTab: View {
                 } header: {
                     Text("Safari 悬浮球（书签版，免扩展）")
                 } footer: {
-                    Text("LiveContainer 里运行的 App 不会把扩展注册进 Safari，书签小工具绕开这个限制：它完全在网页里执行，不需要扩展、不需要签名权限。使用前请在下面开启「识别剪贴板里的 M3U8 链接」。")
+                    Text("LiveContainer 里运行的 App 不会把扩展注册进 Safari，书签小工具绕开这个限制：它完全在网页里执行，不需要扩展、不需要签名权限。\n注意：容器设置里的「独立 AppGroup」只是把 App Group 数据目录隔离开，和扩展能否被系统注册无关，打开它不会让扩展出现在设置里。\n使用前请在下面开启「识别剪贴板里的 M3U8 链接」，或回 App 后在「已嗅探」页点右上角剪贴板按钮手动导入。")
                 }
 
                 Section {
@@ -123,7 +123,7 @@ struct ToolsTab: View {
                 } header: {
                     Text("Safari 扩展")
                 } footer: {
-                    Text("用免费 Apple ID 自签安装时，扩展可能不显示；内置浏览器右下角悬浮球与书签版不依赖扩展，功能完全一样。")
+                    Text("用免费 Apple ID 自签安装时，扩展可能不显示；书签小工具与「已嗅探」页的剪贴板导入不依赖扩展，功能一样。真实扩展只在本体被系统正常安装（Sideloadly / TrollStore）时才生效。")
                 }
 
                 Section("关于") {

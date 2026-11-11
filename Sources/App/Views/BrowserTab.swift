@@ -10,9 +10,6 @@ struct BrowserTab: View {
     @State private var editingAddress = false
     @State private var showSniffedToast = false
     @State private var showPanel = false
-    @AppStorage("floatBall.x") private var ballX: Double = 0.86
-    @AppStorage("floatBall.y") private var ballY: Double = 0.76
-    @State private var dragCenter: CGPoint?
 
     var body: some View {
         NavigationView {
@@ -26,12 +23,6 @@ struct BrowserTab: View {
 
                 ZStack(alignment: .bottom) {
                     WebViewContainer(engine: engine)
-
-                    GeometryReader { proxy in
-                        if !sniffer.streams.isEmpty {
-                            floatingBall(in: proxy.size)
-                        }
-                    }
 
                     VStack(spacing: 8) {
                         if let playlist = engine.interceptedPlaylist {
@@ -93,78 +84,6 @@ struct BrowserTab: View {
         }
     }
 
-    // MARK: - 悬浮球
-
-    /// 页面内可拖动的资源球：只在发现资源时出现，位置会记住。
-    private func floatingBall(in size: CGSize) -> some View {
-        let radius: CGFloat = 26
-        let center = dragCenter ?? CGPoint(
-            x: min(max(radius + 6, ballX * size.width), size.width - radius - 6),
-            y: min(max(radius + 6, ballY * size.height), size.height - radius - 6)
-        )
-        return ZStack {
-            Circle()
-                .fill(
-                    LinearGradient(
-                        colors: [Color.accentColor, Color(red: 0.36, green: 0.36, blue: 0.94)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .overlay(
-                    // 顶部高光 + 细描边，做出玻璃球的通透感
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [Color.white.opacity(0.42), Color.white.opacity(0.02)],
-                                startPoint: .top,
-                                endPoint: .center
-                            )
-                        )
-                )
-                .overlay(Circle().strokeBorder(Color.white.opacity(0.38), lineWidth: 0.9))
-                .frame(width: radius * 2, height: radius * 2)
-                .shadow(color: Color.black.opacity(0.24), radius: 9, x: 0, y: 5)
-
-            Image(systemName: "play.rectangle.on.rectangle.fill")
-                .font(.system(size: 19, weight: .semibold))
-                .foregroundColor(.white)
-
-            Text("\(sniffer.streams.count)")
-                .font(.system(size: 10, weight: .bold))
-                .foregroundColor(.white)
-                .padding(.horizontal, 5)
-                .padding(.vertical, 2)
-                .background(Capsule().fill(Color.red))
-                .overlay(Capsule().stroke(Color.white.opacity(0.9), lineWidth: 1))
-                .offset(x: 17, y: -18)
-        }
-        .frame(width: radius * 2, height: radius * 2)
-        .contentShape(Circle())
-        .position(center)
-        .onTapGesture { showPanel = true }
-        .gesture(
-            DragGesture(minimumDistance: 8)
-                .onChanged { value in
-                    dragCenter = CGPoint(
-                        x: min(max(radius + 6, value.location.x), size.width - radius - 6),
-                        y: min(max(radius + 6, value.location.y), size.height - radius - 6)
-                    )
-                }
-                .onEnded { _ in
-                    guard let end = dragCenter, size.width > 0, size.height > 0 else { return }
-                    ballX = Double(end.x / size.width)
-                    ballY = Double(end.y / size.height)
-                    dragCenter = nil
-                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                }
-        )
-        .accessibilityLabel("本页资源 \(sniffer.streams.count) 个")
-        .accessibilityHint("打开资源列表")
-        .transition(.scale.combined(with: .opacity))
-        .animation(.easeOut(duration: 0.18), value: sniffer.streams.count)
-    }
-
     // MARK: - 地址栏
 
     private var addressBar: some View {
@@ -224,6 +143,7 @@ struct BrowserTab: View {
             toolbarButton(engine.isLoading ? "xmark" : "arrow.clockwise", enabled: true) {
                 engine.isLoading ? engine.stopLoading() : engine.reload()
             }
+            resourcesButton
             toolbarButton("square.and.arrow.up", enabled: engine.currentURL != nil) {
                 shareCurrentPage()
             }
@@ -244,6 +164,30 @@ struct BrowserTab: View {
                 .foregroundColor(enabled ? .primary : .secondary.opacity(0.4))
         }
         .disabled(!enabled)
+    }
+
+    /// 资源入口：替代原来的页面内悬浮球，数量用角标展示。
+    private var resourcesButton: some View {
+        Button { showPanel = true } label: {
+            ZStack(alignment: .topTrailing) {
+                Image(systemName: "play.square.stack")
+                    .font(.system(size: 17, weight: .medium))
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 32)
+                    .foregroundColor(sniffer.streams.isEmpty ? .secondary.opacity(0.4) : .accentColor)
+                if !sniffer.streams.isEmpty {
+                    Text("\(sniffer.streams.count)")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 1)
+                        .background(Capsule().fill(Color.red))
+                        .offset(x: -6, y: 2)
+                }
+            }
+        }
+        .disabled(sniffer.streams.isEmpty)
+        .accessibilityLabel("本页资源 \(sniffer.streams.count) 个")
     }
 
     // MARK: - 浮层

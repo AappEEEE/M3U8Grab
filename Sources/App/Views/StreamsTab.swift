@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct StreamsTab: View {
     @ObservedObject var engine: BrowserEngine
@@ -54,6 +55,14 @@ struct StreamsTab: View {
             .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "搜索标题、域名或链接")
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
+                    Button {
+                        importFromClipboard()
+                    } label: {
+                        Image(systemName: "doc.on.clipboard")
+                    }
+                    .accessibilityLabel("从剪贴板导入链接")
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
                     Menu {
                         Button {
                             selectedTab = 0
@@ -79,6 +88,27 @@ struct StreamsTab: View {
             }
         }
         .navigationViewStyle(.stack)
+    }
+
+    /// 从剪贴板抓第一个视频链接：系统 Safari 里用书签小工具复制后走这里。
+    private func importFromClipboard() {
+        let raw = UIPasteboard.general.string ?? ""
+        guard let match = raw.range(of: #"https?://[^\s"'<>]+"#, options: .regularExpression) else {
+            store.toast = "剪贴板里没有链接"
+            return
+        }
+        let link = String(raw[match])
+        let lower = link.lowercased()
+        let kind: StreamKind
+        if lower.contains(".m3u8") || lower.contains(".m3u") {
+            kind = .hls
+        } else if lower.contains(".mpd") {
+            kind = .dash
+        } else {
+            kind = .file
+        }
+        sniffer.add(urlString: link, kind: kind, pageURLString: nil, pageTitle: "剪贴板导入")
+        store.toast = "已导入 1 个链接"
     }
 
     private var filterBar: some View {

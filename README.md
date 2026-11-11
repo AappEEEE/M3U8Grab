@@ -4,15 +4,15 @@
 
 ## 下载
 
-当前源码版本为 **v1.3.0（build 4）**，主 App 与 Safari 扩展使用相同版本。发布采用「一次构建一个 Release」的策略：每次构建都会新建独立 tag（形如 `v1.3.0-b4-123`）并发布对应的 `M3U8Grab.ipa` 与 `sha256.txt`，历史版本不会被覆盖。打开 [Releases 列表](https://github.com/AappEEEE/M3U8Grab/releases) 选最新的一个即可。
+当前源码版本为 **v1.4.0（build 5）**，主 App 与 Safari 扩展使用相同版本。发布采用「一次构建一个 Release」的策略：每次构建都会新建独立 tag（形如 `v1.4.0-b5-123`）并发布对应的 `M3U8Grab.ipa` 与 `sha256.txt`，历史版本不会被覆盖。打开 [Releases 列表](https://github.com/AappEEEE/M3U8Grab/releases) 选最新的一个即可。
 
 IPA 是未签名构建。Sideloadly、AltStore/SideStore 等侧载工具按各自流程用个人 Apple ID/证书签名；免费 Apple ID 的签名通常需要定期刷新。Xcode 安装需在 macOS 从源码构建并配置签名。TrollStore 则按其支持的系统版本和安装流程操作，不要求个人 Apple ID 签名。
 
 ## 功能
 
-- 内置浏览器：自动识别网页中的 M3U8、MPD、TS、MP4、MP3 等媒体地址；右下角资源球可拖动、点开批量下载，位置会记住。
+- 内置浏览器：自动识别网页中的 M3U8、MPD、TS、MP4、MP3 等媒体地址；底部工具条的「资源」按钮带数量角标，点开即当前页资源列表，可直接下载。
 - Safari Web Extension：工具栏弹窗列出媒体地址；页面内提供可拖动悬浮球和快速交接到 App 的入口。
-- 书签小工具：不装扩展也能在系统 Safari 抓取当前页地址（复制后回到 App 自动识别剪贴板），在 LiveContainer 等无法注册扩展的环境同样可用。
+- 书签小工具：不装扩展也能在系统 Safari 抓取当前页地址（复制后回到 App 自动识别剪贴板，或在「已嗅探」页点剪贴板按钮手动导入），在 LiveContainer 等无法注册扩展的环境同样可用。
 - 下载管理：选择清晰度，AES-128 解密，TS 分片合并、fMP4 直拼，导出 MP4/TS、分享或存入相册；直链文件同样支持暂停、续传与速度显示。
 - 界面：Liquid Glass 质感的悬浮地址栏、底部工具条与提示条，跟随系统深浅色。
 - 稳定性：暂停/继续、已完成分片保留、弱网失败分片延后重试、速度与预计剩余时间。
@@ -32,10 +32,10 @@ IPA 是未签名构建。Sideloadly、AltStore/SideStore 等侧载工具按各�
 
 App Store 上架应用可以在**同一个主 App 安装包**中包含多个 target，其中 Safari Web Extension 是嵌套的 `.appex`。iOS 安装该主 App 时会登记扩展，用户再到系统 Safari 设置里启用；扩展本身并不是主 App 内的一张网页或一个普通开关。
 
-LiveContainer 的实例化运行方式不会让 iOS 把其中的 appex 注册成系统 Safari 扩展。因此，在 LiveContainer 里开两个实例、并行运行主 App，都不会让系统 Safari 设置出现该扩展，也不能在那里显示 Safari 悬浮球。替代方案有两条：
+LiveContainer 的实例化运行方式不会让 iOS 把其中的 appex 注册成系统 Safari 扩展。因此，在 LiveContainer 里开两个实例、并行运行主 App，都不会让系统 Safari 设置出现该扩展，也不能在那里显示 Safari 悬浮球。容器设置里的「独立 AppGroup」开关只影响该容器的 App Group 数据目录，与扩展注册无关，打开它也不会让扩展出现。替代方案有两条：
 
-- 用内置浏览器：右下角资源球由 App 自己绘制，不依赖系统扩展，LiveContainer 里同样可用。
-- 用书签小工具：在「工具」页复制 bookmarklet 代码，到 Safari 新建书签、把地址改成这段 `javascript:` 代码；在任何网页点该书签，就会列出页面里的 M3U8/直链，点一下复制，回到 App 会自动提示加入（需在「工具」页开启「识别剪贴板里的 M3U8 链接」）。
+- 用内置浏览器：「资源」按钮由 App 自己绘制，不依赖系统扩展，LiveContainer 里同样可用。
+- 用书签小工具：在「工具」页复制 bookmarklet 代码，到 Safari 新建书签、把地址改成这段 `javascript:` 代码；在任何网页点该书签，就会列出页面里的 M3U8/直链，点一下复制，回到 App 会自动提示加入（推荐在「工具」页开启「识别剪贴板里的 M3U8 链接」，也可以回 App 后在「已嗅探」页点右上角剪贴板按钮手动导入）。
 
 要在系统 Safari 用扩展本体，需要将含 appex 的 App 以能由 iOS 正常安装/登记扩展的方式安装；再在「设置 › App › Safari › 扩展」中启用并授予网站访问权限。若设备的安装方式没有向 iOS 注册 appex，Safari 设置中就不会出现它。
 
