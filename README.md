@@ -4,7 +4,7 @@
 
 ## 下载
 
-当前源码版本为 **v1.3.0（build 4）**，主 App 与 Safari 扩展使用相同版本。打开 [latest 发布页](https://github.com/AappEEEE/M3U8Grab/releases/tag/latest)，下载稳定命名的 **[M3U8Grab.ipa](https://github.com/AappEEEE/M3U8Grab/releases/download/latest/M3U8Grab.ipa)**；同页的 `sha256.txt` 可校验该 IPA。
+当前源码版本为 **v1.3.0（build 4）**，主 App 与 Safari 扩展使用相同版本。发布采用「一次构建一个 Release」的策略：每次构建都会新建独立 tag（形如 `v1.3.0-b4-123`）并发布对应的 `M3U8Grab.ipa` 与 `sha256.txt`，历史版本不会被覆盖。打开 [Releases 列表](https://github.com/AappEEEE/M3U8Grab/releases) 选最新的一个即可。
 
 IPA 是未签名构建。Sideloadly、AltStore/SideStore 等侧载工具按各自流程用个人 Apple ID/证书签名；免费 Apple ID 的签名通常需要定期刷新。Xcode 安装需在 macOS 从源码构建并配置签名。TrollStore 则按其支持的系统版本和安装流程操作，不要求个人 Apple ID 签名。
 
@@ -60,9 +60,9 @@ LiveContainer 的实例化运行方式不会让 iOS 把其中的 appex 注册成
 ## 构建与发布
 
 - 仓库仅保留一个发布 workflow：`.github/workflows/build-ipa.yml`。推送到 `main`/`master`（仅 README 变化除外）自动构建，也支持在这两个分支手动触发。
-- CI 在 macOS 上运行 HLS 回归测试、XcodeGen 与未签名 iOS Release 构建，打包前检查 App/扩展均为 `1.3.0 (4)`、扩展根目录 manifest 为 `1.3.0`。
-- 验证通过后更新 `latest` 标签到构建提交，覆盖稳定资产 `M3U8Grab.ipa` 与匹配的 `sha256.txt`，并更新发布说明和构建记录；其他分支只构建测试，不发布。
-- 发布任务串行执行，避免并发构建互相覆盖资产。
+- CI 在 macOS 上运行 HLS 回归测试、XcodeGen 与未签名 iOS Release 构建；打包前校验 App 与扩展版本号一致，且扩展根目录 `manifest.json` 的版本与其相同（不再硬编码具体版本号，升版只需改 `project.yml` 与 manifest）。
+- 验证通过后**新建**独立 Release：tag 为 `v<版本>-b<构建号>-<run编号>`，标题带构建编号，资产为 `M3U8Grab.ipa` 与 `sha256.txt`，并标记为 latest。已有同名 tag 时只刷新资产，绝不改写历史发布；其他分支只构建测试，不发布。
+- 发布任务串行执行，避免并发构建互相干扰。
 
 ## 反馈
 

@@ -11,7 +11,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: m3u8grab-latest-release
+  group: m3u8grab-release
   cancel-in-progress: false
 
 jobs:
@@ -88,15 +88,22 @@ jobs:
           import json, os, pathlib, plistlib
           app = pathlib.Path(os.environ['APP'])
           extension = app / 'PlugIns/M3U8GrabSafari.appex'
+          infos = []
           for bundle in (app, extension):
               with (bundle / 'Info.plist').open('rb') as file:
-                  info = plistlib.load(file)
-              assert info['CFBundleShortVersionString'] == '1.3.0', (bundle, info)
-              assert str(info['CFBundleVersion']) == '4', (bundle, info)
+                  infos.append(plistlib.load(file))
+          app_info, ext_info = infos
+          version = app_info['CFBundleShortVersionString']
+          build = str(app_info['CFBundleVersion'])
+          assert version == ext_info['CFBundleShortVersionString'], (version, ext_info)
+          assert build == str(ext_info['CFBundleVersion']), (build, ext_info)
           with (extension / 'manifest.json').open() as file:
-              assert json.load(file)['version'] == '1.3.0'
-          print('App + Safari extension: 1.3.0 (4); root manifest: 1.3.0')
+              manifest_version = json.load(file)['version']
+          assert manifest_version == version, (manifest_version, version)
+          print(f'App + Safari extension: {version} ({build}); root manifest: {manifest_version}')
+          pathlib.Path('version.env').write_text(f'APP_VERSION={version}\nAPP_BUILD={build}\n', encoding='utf-8')
           PY
+          cat version.env >> "$GITHUB_ENV"
           rm -rf Payload M3U8Grab.ipa
           mkdir -p Payload
           cp -R "$APP" Payload/M3U8Grab.app
@@ -107,7 +114,7 @@ jobs:
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
         with:
-          name: M3U8Grab-unsigned-ipa
+          name: M3U8Grab-unsigned-ipa-${{ env.APP_VERSION }}-b${{ env.APP_BUILD }}
           path: |
             M3U8Grab.ipa
             sha256.txt
@@ -119,34 +126,34 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          TAG: latest
         run: |
           set -euo pipefail
-          TITLE="M3U8 Grab v1.3.0 (build 4)"
+          # 每次构建独立一个 Release，历史版本永久保留，不再覆盖 latest。
+          TAG="v${APP_VERSION}-b${APP_BUILD}-${GITHUB_RUN_NUMBER}"
+          TITLE="M3U8 Grab v${APP_VERSION} (build ${APP_BUILD}) · #${GITHUB_RUN_NUMBER}"
           NOTES=$(cat <<EOF
-          ## v1.3.0 · build 4
-          - 全新 Liquid Glass 观感：地址栏、底部工具条、提示条改成悬浮玻璃质感，资源球加高光与描边。
-          - 内置浏览器右下角「资源球」：发现资源后自动出现，可拖动、点开直接批量下载，位置会记住。
-          - 新增书签小工具（bookmarklet）：不装扩展、在 LiveContainer 里也能在系统 Safari 抓地址，复制后回到 App 自动识别剪贴板。
-          - 嗅探列表支持搜索与「全部 / M3U8 / 直链」筛选；新增 DASH（.mpd）与音频直链识别。
+          ## v${APP_VERSION} · build ${APP_BUILD} · 构建 #${GITHUB_RUN_NUMBER}
+          - Liquid Glass 观感：地址栏、底部工具条、提示条为悬浮玻璃质感，资源球带高光与描边。
+          - 内置浏览器右下角「资源球」：发现资源后自动出现，可拖动、点开批量下载，位置会记住。
+          - 书签小工具（bookmarklet）：不装扩展、在 LiveContainer 里也能在系统 Safari 抓地址，复制后回 App 自动识别剪贴板。
+          - 嗅探列表支持搜索与「全部 / M3U8 / 直链」筛选；识别 DASH（.mpd）与音频直链。
           - 直链（mp4/mp3/m4a 等）可直接下载，支持暂停、续传、速度与剩余时间。
-          - 详情页可一键复制带 Referer / UA 的 curl 命令，方便交给电脑端工具。
-          - 嗅探扩展同步扩容：m3u、mpd、mp3、m4a、aac、ogg、wav、opus 等。
+          - 详情页可一键复制带 Referer / UA 的 curl 命令。
+          - 嗅探扩展扩容：m3u、mpd、mp3、m4a、aac、ogg、wav、opus 等。
 
           此 IPA 未签名。Sideloadly/AltStore/SideStore 等安装工具需要个人 Apple ID 或签名证书；TrollStore 按其适用系统和安装流程操作。
-          稳定下载资产：M3U8Grab.ipa；校验文件：sha256.txt。
+          下载资产：M3U8Grab.ipa；校验文件：sha256.txt。
           构建提交：${GITHUB_SHA}
           构建记录：https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
           EOF
           )
-          gh api --method PATCH "repos/${GH_REPO}/git/refs/tags/${TAG}" -f sha="$GITHUB_SHA" -F force=true || \
-            gh api --method POST "repos/${GH_REPO}/git/refs" -f ref="refs/tags/${TAG}" -f sha="$GITHUB_SHA"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release edit "$TAG" --title "$TITLE" --notes "$NOTES" --latest
+            echo "release $TAG already exists; keeping it and refreshing assets"
           else
-            gh release create "$TAG" --verify-tag --title "$TITLE" --notes "$NOTES" --latest
+            gh release create "$TAG" --target "$GITHUB_SHA" --title "$TITLE" --notes "$NOTES" --latest
           fi
           gh release upload "$TAG" M3U8Grab.ipa sha256.txt --clobber
+          echo "published: https://github.com/${GH_REPO}/releases/tag/${TAG}"
 
       - name: Upload build log on failure
         if: failure()
